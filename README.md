@@ -39,10 +39,10 @@ Add this to your `~/.claude/settings.json`:
 {
   "mcpServers": {
     "apertis": {
-      "command": "apertis-mcp",
+      "command": "npx",
+      "args": ["@apertis/mcp-server"],
       "env": {
-        "APERTIS_API_KEY": "sk-your-key-here",
-        "APERTIS_BASE_URL": "https://api.apertis.ai"
+        "APERTIS_API_KEY": "sk-your-key-here"
       }
     }
   }
@@ -57,7 +57,8 @@ Add this to your `openclaw.json`:
 {
   "mcpServers": {
     "apertis": {
-      "command": "apertis-mcp",
+      "command": "npx",
+      "args": ["@apertis/mcp-server"],
       "env": {
         "APERTIS_API_KEY": "sk-your-key-here"
       }

@@ -18,7 +18,7 @@ async function main() {
 
     // Create MCP server
     const server = new McpServer(
-      { name: "apertis", version: "0.1.0" },
+      { name: "apertis", version: "0.2.0" },
       {
         instructions:
           "Apertis MCP Server for managing your AI API Gateway. Use check_quota before suggesting model switches. All tools are available for querying models, account info, usage stats, and API keys.",

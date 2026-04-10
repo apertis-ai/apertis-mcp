@@ -210,7 +210,7 @@ export class ApertisClient {
     period: "today" | "week" | "month" = "today",
   ): Promise<UsageStat> {
     const response = await this.request(
-      `/api/log/stat?period=${encodeURIComponent(period)}`,
+      `/v1/token/usage?period=${encodeURIComponent(period)}`,
     );
     if (!response.ok) {
       throw new Error(
@@ -223,7 +223,7 @@ export class ApertisClient {
   }
 
   async getTokens(): Promise<Token[]> {
-    const response = await this.request("/api/token/");
+    const response = await this.request("/v1/token/keys");
     if (!response.ok) {
       throw new Error(
         `Failed to fetch tokens: ${response.status} ${response.statusText}`,
@@ -237,7 +237,7 @@ export class ApertisClient {
 
   async createToken(name: string, quota?: number): Promise<Token> {
     const payload = { name, ...(quota && { quota }) };
-    const response = await this.request("/api/token/", {
+    const response = await this.request("/v1/token/keys", {
       method: "POST",
       body: JSON.stringify(payload),
     });
