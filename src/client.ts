@@ -13,11 +13,13 @@ export interface Model {
   capabilities?: string[];
   group?: string;
   is_free?: boolean;
+  category?: string;
+  features?: string[];
 }
 
 export interface User {
   id: number;
-  email: string;
+  email?: string;
   name?: string;
   balance?: number;
   subscription_plan?: string;
@@ -52,15 +54,38 @@ export interface UsageStat {
   }>;
 }
 
+// Raw response from /api/v2/models
+interface ApiModelEntry {
+  model_id: string;
+  display_name: string;
+  provider: string;
+  category: string;
+  charge_type: string;
+  input_price: number;
+  output_price: number;
+  context_length: number | null;
+  features: string[];
+  tasks: string[];
+  description: string | null;
+  is_enabled: boolean;
+  is_deprecated: boolean;
+}
+
+interface ApiModelsResponse {
+  models: ApiModelEntry[];
+  pagination: { total: number };
+}
+
 export class ApertisClient {
   private apiKey: string;
   private baseUrl: string;
   private cache = new Map<string, { data: unknown; timestamp: number }>();
   private cacheTTL = 5 * 60 * 1000; // 5 minutes
+  private modelsFetching: Promise<Model[]> | null = null;
 
   constructor(apiKey: string, baseUrl: string) {
     this.apiKey = apiKey;
-    this.baseUrl = baseUrl.replace(/\/$/, ""); // Remove trailing slash
+    this.baseUrl = baseUrl.replace(/\/$/, "");
   }
 
   private getCached<T>(key: string): T | null {
@@ -76,7 +101,7 @@ export class ApertisClient {
     this.cache.set(key, { data, timestamp: Date.now() });
   }
 
-  private async fetch(
+  private async request(
     endpoint: string,
     options: RequestInit = {},
   ): Promise<Response> {
@@ -87,63 +112,104 @@ export class ApertisClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    return response;
+    return fetch(url, { ...options, headers });
   }
 
   async getModels(): Promise<Model[]> {
     const cached = this.getCached<Model[]>("models");
     if (cached) return cached;
 
-    const response = await this.fetch("/api/models");
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch models: ${response.status} ${response.statusText}`,
-      );
-    }
+    // Deduplicate concurrent requests
+    if (this.modelsFetching) return this.modelsFetching;
 
-    const data = (await response.json()) as unknown;
-    const models = Array.isArray(data)
-      ? data
-      : ((data as Record<string, unknown>).data as Model[]);
-    this.setCache("models", models);
-    return models;
+    this.modelsFetching = (async () => {
+      try {
+        // Use /api/v2/models which has pricing, context_length, provider
+        const response = await this.request(
+          "/api/v2/models?page=1&page_size=500",
+        );
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch models: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        const body = (await response.json()) as {
+          data?: ApiModelsResponse;
+        } & ApiModelsResponse;
+        const entries = body.data?.models || body.models || [];
+
+        const models: Model[] = entries
+          .filter((e) => e.is_enabled && !e.is_deprecated)
+          .map((e) => ({
+            id: e.model_id,
+            name: e.display_name || e.model_id,
+            provider: e.provider || "Unknown",
+            pricing: {
+              input_per_million: e.input_price,
+              output_per_million: e.output_price,
+            },
+            context_window: e.context_length ?? undefined,
+            description: e.description ?? undefined,
+            capabilities: e.features || [],
+            category: e.category,
+            features: e.tasks || [],
+            is_free:
+              e.charge_type === "free" ||
+              (e.input_price === 0 && e.output_price === 0),
+          }));
+
+        this.setCache("models", models);
+        return models;
+      } finally {
+        this.modelsFetching = null;
+      }
+    })();
+
+    return this.modelsFetching;
   }
 
   async getModelInfo(modelId: string): Promise<Model> {
-    const response = await this.fetch(
-      `/api/models/${encodeURIComponent(modelId)}`,
-    );
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch model info: ${response.status} ${response.statusText}`,
-      );
-    }
+    // Try from cache first
+    const allModels = await this.getModels();
+    const found = allModels.find((m) => m.id === modelId);
+    if (found) return found;
 
-    const data = (await response.json()) as Model;
-    return data;
+    throw new Error(`Model '${modelId}' not found`);
   }
 
   async getUserSelf(): Promise<User> {
-    const response = await this.fetch("/api/user/self");
+    // Uses /v1/token/info — works with API key auth (no JWT needed)
+    const response = await this.request("/v1/token/info");
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch user info: ${response.status} ${response.statusText}`,
+        `Failed to fetch token info: ${response.status} ${response.statusText}`,
       );
     }
 
-    const data = (await response.json()) as User;
-    return data;
+    const body = (await response.json()) as {
+      success: boolean;
+      data: Record<string, unknown>;
+    };
+    const d = body.data || body;
+    const owner = d.owner as Record<string, string> | undefined;
+    const sub = d.subscription as Record<string, unknown> | undefined;
+
+    return {
+      id: d.id as number,
+      email: owner?.email,
+      name: owner?.username || (d.name as string),
+      balance: d.remain_quota_usd as number | undefined,
+      subscription_plan: sub?.plan as string | undefined,
+      subscription_status: sub?.status as string | undefined,
+      subscription_expiry: sub?.expiry as string | undefined,
+    };
   }
 
   async getUsageStats(
     period: "today" | "week" | "month" = "today",
   ): Promise<UsageStat> {
-    const response = await this.fetch(
+    const response = await this.request(
       `/api/log/stat?period=${encodeURIComponent(period)}`,
     );
     if (!response.ok) {
@@ -157,25 +223,23 @@ export class ApertisClient {
   }
 
   async getTokens(): Promise<Token[]> {
-    const response = await this.fetch("/api/token/");
+    const response = await this.request("/api/token/");
     if (!response.ok) {
       throw new Error(
         `Failed to fetch tokens: ${response.status} ${response.statusText}`,
       );
     }
 
-    const data = (await response.json()) as unknown;
-    const tokens = Array.isArray(data)
-      ? data
-      : ((data as Record<string, unknown>).data as Token[]);
-    return tokens;
+    const body = (await response.json()) as unknown;
+    const result = body as { success: boolean; data: Token[] };
+    return result.data || (Array.isArray(body) ? (body as Token[]) : []);
   }
 
   async createToken(name: string, quota?: number): Promise<Token> {
-    const body = { name, ...(quota && { quota }) };
-    const response = await this.fetch("/api/token/", {
+    const payload = { name, ...(quota && { quota }) };
+    const response = await this.request("/api/token/", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -184,7 +248,7 @@ export class ApertisClient {
       );
     }
 
-    const data = (await response.json()) as Token;
-    return data;
+    const body = (await response.json()) as { success: boolean; data: Token };
+    return body.data || (body as unknown as Token);
   }
 }
