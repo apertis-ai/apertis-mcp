@@ -27,6 +27,31 @@ export interface User {
   subscription_expiry?: string;
 }
 
+export type RecommendTask =
+  | "coding"
+  | "long-context"
+  | "fast-chat"
+  | "reasoning"
+  | "vision";
+
+export type RecommendBudget = "low" | "medium" | "high";
+
+export interface RecommendAlternative {
+  model: string;
+  input_price_per_1m: number;
+  note: string;
+}
+
+export interface Recommendation {
+  model: string;
+  task: RecommendTask;
+  budget: RecommendBudget;
+  input_price_per_1m: number;
+  output_price_per_1m: number;
+  reason: string;
+  alternatives: RecommendAlternative[];
+}
+
 export interface Token {
   id: string;
   name: string;
@@ -233,6 +258,21 @@ export class ApertisClient {
     const body = (await response.json()) as unknown;
     const result = body as { success: boolean; data: Token[] };
     return result.data || (Array.isArray(body) ? (body as Token[]) : []);
+  }
+
+  async getRecommendation(
+    task: RecommendTask,
+    budget: RecommendBudget = "medium",
+  ): Promise<Recommendation> {
+    const params = new URLSearchParams({ task, budget });
+    const response = await this.request(`/v1/recommend?${params.toString()}`);
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Failed to fetch recommendation: ${response.status} ${response.statusText}${text ? ` — ${text}` : ""}`,
+      );
+    }
+    return (await response.json()) as Recommendation;
   }
 
   async createToken(name: string, quota?: number): Promise<Token> {

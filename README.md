@@ -78,7 +78,8 @@ Add this to your `openclaw.json`:
 | `get_usage_stats` | Get usage statistics by model and time period (today/week/month) |
 | `list_api_keys` | List all your API keys with status and quota (keys are masked) |
 | `create_api_key` | Create a new API key with optional quota limit |
-| `suggest_model` | Get intelligent model recommendations based on task and budget |
+| `suggest_model` | Freeform keyword-based model search over the full catalog |
+| `recommend_model` | Get the curated Apertis pick for a task type (`coding`, `long-context`, `fast-chat`, `reasoning`, `vision`) with live pricing |
 
 ## Available Resources
 
@@ -101,10 +102,12 @@ MCP: Use the check_quota tool
 ### Find a Model for Your Task
 
 ```
-Claude: suggest a model for code generation on a tight budget
-MCP: Use suggest_model with task="code generation" and budget="low"
-→ Returns top 3 recommendations with pricing and reasoning
+Claude: what model should I use for coding on a tight budget?
+MCP: Use recommend_model with task="coding" and budget="low"
+→ Returns the curated pick (e.g. deepseek-v3) with live pricing and alternatives
 ```
+
+For freeform keyword search over the full catalog (e.g. "something good at translation"), use `suggest_model` instead.
 
 ### Compare Models
 
