@@ -6,6 +6,12 @@
   "bin": {
     "apertis-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "coworker-rules.md",
+    "QUICK_START.md",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
