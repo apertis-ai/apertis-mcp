@@ -80,6 +80,7 @@ Add this to your `openclaw.json`:
 | `create_api_key` | Create a new API key with optional quota limit |
 | `suggest_model` | Freeform keyword-based model search over the full catalog |
 | `recommend_model` | Get the curated Apertis pick for a task type (`coding`, `long-context`, `fast-chat`, `reasoning`, `vision`) with live pricing |
+| `delegate` | Delegate bulk grunt work (bulk file reads, boilerplate, summarization) to a cheap intern model. Files are read by the coworker, so their content never enters your context — keeps your Claude usage limit intact |
 
 ## Available Resources
 
@@ -137,10 +138,33 @@ MCP: Use create_api_key with name="my-app" and quota=1000000
 → Shows the new key once (save it immediately!)
 ```
 
+### Delegate Grunt Work to a Coworker
+
+The `delegate` tool gives Claude Code a cheap "intern". Claude stays the manager
+on your Anthropic subscription and hands off high-volume, low-judgement work —
+bulk file reads, boilerplate, summarization — to a cheap model through Apertis.
+The coworker reads files itself, so their bulk content never enters Claude's
+context, and the work runs on Apertis credit rather than your Claude usage limit.
+
+```
+Claude: summarize the errors in build.log
+MCP: Use delegate with instruction="Summarize the errors in <=10 bullets"
+     and file_paths=["build.log"]
+→ Returns a concise summary; the full log never enters Claude's context
+```
+
+`delegate` parameters: `instruction` (required), `file_paths` (optional — read
+locally by the coworker), `content` (optional inline text), `model` (optional —
+defaults to `deepseek-v4-flash`, override via `APERTIS_COWORKER_MODEL`).
+
+To make Claude delegate automatically, paste the routing rules from
+[`coworker-rules.md`](./coworker-rules.md) into your project's `CLAUDE.md`.
+
 ## Environment Variables
 
 - `APERTIS_API_KEY` (required): Your Apertis API key (starts with `sk-`)
 - `APERTIS_BASE_URL` (optional): API base URL, defaults to `https://api.apertis.ai`
+- `APERTIS_COWORKER_MODEL` (optional): Intern model for the `delegate` tool, defaults to `deepseek-v4-flash`
 
 ## Security Notes
 

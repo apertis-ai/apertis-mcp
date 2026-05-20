@@ -8,6 +8,7 @@ import { registerAccountTools } from "./tools/account.js";
 import { registerKeyTools } from "./tools/keys.js";
 import { registerSuggestTool } from "./tools/suggest.js";
 import { registerRecommendTool } from "./tools/recommend.js";
+import { registerDelegateTool } from "./tools/delegate.js";
 import { registerAccountResource } from "./resources/account.js";
 import { registerModelsResource } from "./resources/models.js";
 import { registerUsageResource } from "./resources/usage.js";
@@ -19,7 +20,7 @@ async function main() {
 
     // Create MCP server
     const server = new McpServer(
-      { name: "apertis", version: "0.3.0" },
+      { name: "apertis", version: "0.4.0" },
       {
         instructions:
           "Apertis MCP Server for managing your AI API Gateway. Use check_quota before suggesting model switches. All tools are available for querying models, account info, usage stats, and API keys.",
@@ -46,6 +47,9 @@ async function main() {
 
     await registerRecommendTool(client, server);
     console.error("[Apertis MCP] Registered recommend tool");
+
+    await registerDelegateTool(client, server);
+    console.error("[Apertis MCP] Registered delegate tool");
 
     // Register all resources
     await registerAccountResource(client, server);

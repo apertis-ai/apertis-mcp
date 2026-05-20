@@ -291,4 +291,32 @@ export class ApertisClient {
     const body = (await response.json()) as { success: boolean; data: Token };
     return body.data || (body as unknown as Token);
   }
+
+  async chatCompletion(
+    model: string,
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  ): Promise<string> {
+    const response = await this.request("/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model, messages }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Chat completion failed: ${response.status} ${response.statusText}${text ? ` — ${text}` : ""}`,
+      );
+    }
+
+    const body = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = body?.choices?.[0]?.message?.content;
+    if (typeof content !== "string") {
+      throw new Error(
+        "Chat completion response missing choices[0].message.content",
+      );
+    }
+    return content;
+  }
 }
