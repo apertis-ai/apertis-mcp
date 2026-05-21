@@ -12,6 +12,68 @@ const INTERN_SYSTEM =
   "Follow the instruction exactly and return only the concise result. " +
   "Do not add preamble, restate the task, or pad the output.";
 
+export interface DelegateArgs {
+  instruction: string;
+  file_paths?: string[];
+  content?: string;
+  model?: string;
+}
+
+/** The chat-completion signature delegate depends on (a slice of ApertisClient). */
+export type ChatFn = ApertisClient["chatCompletion"];
+
+export interface DelegateDeps {
+  chat: ChatFn;
+  cwd?: string;
+  warn?: (msg: string) => void;
+}
+
+/**
+ * Core delegate logic: validate input, read any local files, build the
+ * intern prompt, and run it on the cheap model. Pure enough to unit-test
+ * with a mock `chat` — no MCP server or real ApertisClient required.
+ */
+export async function runDelegate(
+  args: DelegateArgs,
+  deps: DelegateDeps,
+): Promise<string> {
+  const cwd = deps.cwd ?? process.cwd();
+  const warn =
+    deps.warn ?? ((m: string) => console.error(`[Apertis MCP] ${m}`));
+
+  if (!args.instruction || args.instruction.trim() === "") {
+    throw new Error("delegate requires a non-empty 'instruction'.");
+  }
+
+  const parts: string[] = [`# Instruction\n${args.instruction}`];
+
+  for (const p of args.file_paths ?? []) {
+    const abs = resolve(cwd, p);
+    const rel = relative(cwd, abs);
+    if (rel.startsWith("..") || isAbsolute(rel)) {
+      warn(`delegate: file path is outside the working directory: ${p}`);
+    }
+    let fileContent: string;
+    try {
+      fileContent = await readFile(abs, "utf8");
+    } catch (e) {
+      throw new Error(
+        `delegate: cannot read file '${p}': ${(e as Error).message}`,
+      );
+    }
+    parts.push(`# File: ${p}\n${fileContent}`);
+  }
+
+  if (args.content && args.content.trim() !== "") {
+    parts.push(`# Content\n${args.content}`);
+  }
+
+  return deps.chat(args.model ?? DEFAULT_MODEL, [
+    { role: "system", content: INTERN_SYSTEM },
+    { role: "user", content: parts.join("\n\n") },
+  ]);
+}
+
 const DelegateInput = z.object({
   instruction: z
     .string()
@@ -44,48 +106,11 @@ export async function registerDelegateTool(
         "Keeps your Claude usage limit intact for the work that needs your judgement.",
       inputSchema: DelegateInput,
     },
-    async ({
-      instruction,
-      file_paths,
-      content,
-      model,
-    }: z.infer<typeof DelegateInput>) => {
+    async (args: z.infer<typeof DelegateInput>) => {
       try {
-        if (!instruction || instruction.trim() === "") {
-          throw new Error("delegate requires a non-empty 'instruction'.");
-        }
-
-        const cwd = process.cwd();
-        const parts: string[] = [`# Instruction\n${instruction}`];
-
-        for (const p of file_paths ?? []) {
-          const abs = resolve(cwd, p);
-          const rel = relative(cwd, abs);
-          if (rel.startsWith("..") || isAbsolute(rel)) {
-            console.error(
-              `[Apertis MCP] delegate: file path is outside the working directory: ${p}`,
-            );
-          }
-          let fileContent: string;
-          try {
-            fileContent = await readFile(abs, "utf8");
-          } catch (e) {
-            throw new Error(
-              `delegate: cannot read file '${p}': ${(e as Error).message}`,
-            );
-          }
-          parts.push(`# File: ${p}\n${fileContent}`);
-        }
-
-        if (content && content.trim() !== "") {
-          parts.push(`# Content\n${content}`);
-        }
-
-        const result = await client.chatCompletion(model ?? DEFAULT_MODEL, [
-          { role: "system", content: INTERN_SYSTEM },
-          { role: "user", content: parts.join("\n\n") },
-        ]);
-
+        const result = await runDelegate(args, {
+          chat: client.chatCompletion.bind(client),
+        });
         return { content: [{ type: "text" as const, text: result }] };
       } catch (error) {
         return toolError("delegating work", error);

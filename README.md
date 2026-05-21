@@ -192,6 +192,9 @@ npm run build
 
 # Run in development
 npm run dev
+
+# Run tests (builds first, then runs unit + integration tests)
+npm test
 ```
 
 ## License
