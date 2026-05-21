@@ -11,7 +11,10 @@ const serverPath = join(here, "..", "dist", "index.js");
 
 interface JsonRpcMessage {
   id?: number;
-  result?: { tools?: { name: string }[] } & Record<string, unknown>;
+  result?: { tools?: { name: string }[]; isError?: boolean } & Record<
+    string,
+    unknown
+  >;
 }
 
 test("MCP handshake lists delegate and tools/call round-trips through Apertis", async () => {
@@ -65,6 +68,20 @@ test("MCP handshake lists delegate and tools/call round-trips through Apertis", 
     params: { name: "delegate", arguments: { instruction: "do something" } },
   });
   await new Promise((r) => setTimeout(r, 700));
+  // Error path: an unreadable file_path must come back as a protocol-level error.
+  send({
+    jsonrpc: "2.0",
+    id: 4,
+    method: "tools/call",
+    params: {
+      name: "delegate",
+      arguments: {
+        instruction: "x",
+        file_paths: ["/tmp/apertis-mcp-integration-missing.txt"],
+      },
+    },
+  });
+  await new Promise((r) => setTimeout(r, 500));
 
   proc.kill();
   mock.close();
@@ -77,6 +94,7 @@ test("MCP handshake lists delegate and tools/call round-trips through Apertis", 
 
   const toolsList = msgs.find((m) => m.id === 2);
   const toolCall = msgs.find((m) => m.id === 3);
+  const errorCall = msgs.find((m) => m.id === 4);
 
   assert.ok(
     toolsList?.result?.tools?.some((t) => t.name === "delegate"),
@@ -86,5 +104,10 @@ test("MCP handshake lists delegate and tools/call round-trips through Apertis", 
     JSON.stringify(toolCall?.result),
     /INTERN_RESULT_OK/,
     "tools/call delegate should return the intern model result",
+  );
+  assert.equal(
+    errorCall?.result?.isError,
+    true,
+    "delegate with an unreadable file_path should return isError: true",
   );
 });
