@@ -4,7 +4,7 @@
 
 ### For Claude Code Users
 
-1. Get your Apertis API key from https://apertis.ai/settings/keys
+1. Get your Apertis API key from https://apertis.ai/settings/keys?utm_source=apertis-mcp&utm_medium=quickstart&utm_campaign=ecosystem
 2. Add this to `~/.claude/settings.json`:
 
 ```json
@@ -142,7 +142,7 @@ Check that:
 - Apertis API is reachable (api.apertis.ai)
 
 ### "Bearer token authentication failed"
-Your API key may be invalid or revoked. Generate a new one at https://apertis.ai/settings/keys
+Your API key may be invalid or revoked. Generate a new one at https://apertis.ai/settings/keys?utm_source=apertis-mcp&utm_medium=quickstart&utm_campaign=ecosystem
 
 ## Next Steps
 
@@ -159,6 +159,6 @@ Your API key may be invalid or revoked. Generate a new one at https://apertis.ai
 
 ## Support
 
-Questions or issues? Visit https://apertis.ai/docs or create an issue on GitHub.
+Questions or issues? Visit https://apertis.ai/docs?utm_source=apertis-mcp&utm_medium=quickstart&utm_campaign=ecosystem or create an issue on GitHub.
 
 Enjoy exploring the Apertis ecosystem!

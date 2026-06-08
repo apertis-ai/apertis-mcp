@@ -7,7 +7,7 @@
     "type": "git",
     "url": "git+https://github.com/apertis-ai/apertis-mcp.git"
   },
-  "homepage": "https://github.com/apertis-ai/apertis-mcp#readme",
+  "homepage": "https://apertis.ai?utm_source=apertis-mcp&utm_medium=npm&utm_campaign=ecosystem",
   "bin": {
     "apertis-mcp": "dist/index.js"
   },
