@@ -26,6 +26,9 @@ jobs:
       - name: Build + test
         run: npm test
 
+      - name: Clean-install smoke test
+        run: npm run smoke
+
       - name: Publish
         run: npm publish --provenance --access public
         env:

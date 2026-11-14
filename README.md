@@ -74,10 +74,9 @@ Add this to your `openclaw.json`:
 | `list_models` | List all available models with optional filtering (free/paid, capability) |
 | `get_model_info` | Get detailed info about a specific model (pricing, context, provider) |
 | `compare_models` | Side-by-side comparison of 2-5 models |
-| `check_quota` | Check your account balance, subscription status, and remaining quota |
-| `get_usage_stats` | Get usage statistics by model and time period (today/week/month) |
+| `check_quota` | Check this key's remaining quota, usage, status, and subscription |
+| `get_usage_stats` | Get all-time usage totals (tokens, requests, spend) for this key |
 | `list_api_keys` | List all your API keys with status and quota (keys are masked) |
-| `create_api_key` | Create a new API key with optional quota limit |
 | `suggest_model` | Freeform keyword-based model search over the full catalog |
 | `recommend_model` | Get the curated Apertis pick for a task type (`coding`, `long-context`, `fast-chat`, `reasoning`, `vision`) with live pricing |
 | `delegate` | Delegate bulk grunt work (bulk file reads, boilerplate, summarization) to a cheap intern model. Files are read by the coworker, so their content never enters your context — keeps your Claude usage limit intact |
@@ -86,9 +85,9 @@ Add this to your `openclaw.json`:
 
 | Resource | Description |
 |----------|-------------|
-| `apertis://account` | Current account info, balance, and subscription status |
+| `apertis://account` | This key's info, remaining quota, and subscription status |
 | `apertis://models` | Full catalog of available models (cached 5 min) |
-| `apertis://usage/today` | Today's usage summary by model |
+| `apertis://usage/today` | Usage totals for this key |
 
 ## Examples
 
@@ -121,9 +120,9 @@ MCP: Use compare_models with models=["gpt-4o", "claude-opus-4"]
 ### Check Usage
 
 ```
-Claude: how much have I used this week?
-MCP: Use get_usage_stats with period="week"
-→ Shows total tokens/cost and breakdown by model
+Claude: how much have I used so far?
+MCP: Use get_usage_stats
+→ Shows all-time total tokens, requests and spend for this key
 ```
 
 ### Manage API Keys
@@ -133,9 +132,7 @@ Claude: list my API keys
 MCP: Use list_api_keys
 → Shows all keys with status and quota (masked for security)
 
-Claude: create a new API key called "my-app" with 1M token quota
-MCP: Use create_api_key with name="my-app" and quota=1000000
-→ Shows the new key once (save it immediately!)
+New keys are created in the Apertis dashboard, not through this server.
 ```
 
 ### Delegate Grunt Work to a Coworker

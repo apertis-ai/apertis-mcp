@@ -1,8 +1,8 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { ApertisClient } from "../client.js";
-import { formatTable } from "../utils/table.js";
 import { toolError } from "../utils/error.js";
+import { count, lines, usd, when } from "../utils/format.js";
 
 const CheckQuotaInput = z.object({});
 
@@ -10,7 +10,9 @@ const GetUsageStatsInput = z.object({
   period: z
     .enum(["today", "week", "month"])
     .optional()
-    .describe("Time period for usage stats"),
+    .describe(
+      "Accepted for compatibility; the gateway reports all-time totals for this key",
+    ),
 });
 
 export async function registerAccountTools(
@@ -21,25 +23,38 @@ export async function registerAccountTools(
     "check_quota",
     {
       description:
-        "Check your account balance, remaining quota, subscription status, and plan details",
+        "Check this API key's remaining quota, usage, status, and subscription details",
       inputSchema: CheckQuotaInput,
     },
     async () => {
       try {
-        const user = await client.getUserSelf();
-        const info = `
-Account Information:
-  Email: ${user.email}
-  Name: ${user.name || "N/A"}
-
-Balance & Quota:
-  Balance: $${user.balance?.toFixed(2) || "N/A"}
-
-Subscription:
-  Plan: ${user.subscription_plan || "None"}
-  Status: ${user.subscription_status || "N/A"}
-  Expires: ${user.subscription_expiry || "N/A"}
-`.trim();
+        const t = await client.getTokenInfo();
+        const key = lines([
+          ["Name", t.name],
+          ["Status", t.status],
+          ["Created", when(t.created_at)],
+          ["Last used", when(t.last_used_at)],
+          ["Expires", when(t.expired_at)],
+        ]);
+        const quota = lines([
+          [
+            "Remaining",
+            t.unlimited_quota ? "Unlimited" : usd(t.remain_quota_usd),
+          ],
+          ["Used", usd(t.used_quota_usd)],
+          ["Monthly limit", usd(t.monthly_limit_usd)],
+          ["Monthly used", usd(t.monthly_used_usd)],
+        ]);
+        const sub = t.subscription
+          ? lines([
+              ["Plan", t.subscription.plan],
+              ["Status", t.subscription.status],
+              ["Expires", when(t.subscription.expiry)],
+            ])
+          : [];
+        let info = "API Key:\n" + (key.join("\n") || "  (no details)");
+        info += "\n\nQuota:\n" + (quota.join("\n") || "  (no details)");
+        info += "\n\nSubscription:\n" + (sub.join("\n") || "  None");
         return { content: [{ type: "text", text: info }] };
       } catch (error) {
         return toolError("checking quota", error);
@@ -50,44 +65,24 @@ Subscription:
   server.registerTool(
     "get_usage_stats",
     {
-      description: "Get usage statistics by model and time period",
+      description:
+        "Get all-time usage totals (tokens, requests, spend) for this API key",
       inputSchema: GetUsageStatsInput,
     },
-    async ({ period = "today" }: z.infer<typeof GetUsageStatsInput>) => {
+    async (_args: z.infer<typeof GetUsageStatsInput>) => {
       try {
-        const stats = await client.getUsageStats(period);
-        let output = `Usage Statistics (${period.toUpperCase()})\n`;
-
-        if (
-          stats.total_tokens !== undefined ||
-          stats.total_cost !== undefined
-        ) {
-          output += `\nSummary:
-  Total Tokens: ${stats.total_tokens?.toLocaleString() || "N/A"}
-  Total Cost: $${stats.total_cost?.toFixed(2) || "N/A"}
-`;
-        }
-
-        if (stats.models && stats.models.length > 0) {
-          output += "\nBy Model:\n";
-          const rows = stats.models.map((m) => [
-            m.model,
-            m.tokens.toLocaleString(),
-            `$${m.cost.toFixed(4)}`,
-          ]);
-          output += formatTable(["Model", "Tokens", "Cost"], rows);
-        }
-
-        if (stats.daily_breakdown && stats.daily_breakdown.length > 0) {
-          output += "\n\nDaily Breakdown:\n";
-          const rows = stats.daily_breakdown.map((d) => [
-            d.date,
-            d.tokens.toLocaleString(),
-            `$${d.cost.toFixed(4)}`,
-          ]);
-          output += formatTable(["Date", "Tokens", "Cost"], rows);
-        }
-
+        const s = await client.getUsageStats();
+        const body = lines([
+          ["Key", s.token_name],
+          ["Total tokens", count(s.total_tokens)],
+          ["Total requests", count(s.total_requests)],
+          ["Total spend", usd(s.total_quota_usd, 4)],
+          ["Used quota", usd(s.used_quota_usd, 4)],
+          ["Remaining quota", usd(s.remain_quota_usd, 4)],
+        ]);
+        const output =
+          "Usage Statistics (all time):\n" +
+          (body.join("\n") || "  (no data)");
         return { content: [{ type: "text", text: output }] };
       } catch (error) {
         return toolError("fetching usage stats", error);

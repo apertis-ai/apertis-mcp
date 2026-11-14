@@ -11,16 +11,10 @@ export async function registerUsageResource(
     {},
     async (uri: URL) => {
       try {
-        const stats = await client.getUsageStats("today");
+        const stats = await client.getUsageStats();
 
         const data = {
-          period: "today",
-          summary: {
-            total_tokens: stats.total_tokens,
-            total_cost: stats.total_cost,
-          },
-          by_model: stats.models,
-          daily: stats.daily_breakdown,
+          ...stats,
           retrieved_at: new Date().toISOString(),
         };
 

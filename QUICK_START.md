@@ -67,14 +67,13 @@ npm run dev
 ### Account Management
 ```
 "check my remaining quota"
-"how much have I spent this month?"
+"how much have I spent so far?"
 "what's my subscription status?"
 ```
 
 ### API Key Management
 ```
 "list my API keys"
-"create a new API key for my app"
 "show me all my keys"
 ```
 
@@ -97,9 +96,9 @@ npm run dev
 This MCP server connects your AI agent to your Apertis account. You can:
 
 - **Browse Models**: List 500+ models from 30+ providers with live pricing
-- **Check Balance**: See your account balance and subscription status instantly
-- **Manage Keys**: Create and list API keys without leaving the chat
-- **Get Stats**: Check daily, weekly, or monthly usage by model
+- **Check Balance**: See this key's remaining quota and subscription status instantly
+- **Manage Keys**: List your API keys without leaving the chat (create new ones in the dashboard)
+- **Get Stats**: Check all-time token, request and spend totals for this key
 - **Smart Suggestions**: Get AI-powered model recommendations based on your task and budget
 
 ## Pricing Display
@@ -123,8 +122,8 @@ This means:
 - Only used for requests to Apertis API
 
 ✅ **Keys are masked in output**
-- When listing keys, you see: `sk-ab...xyzt` (first 4 + last 4)
-- Full key only shown once when creating
+- When listing keys, you see only the first 8 characters, e.g. `sk-abcde...`
+- Keys are masked by the gateway; this server never shows a full key
 
 ✅ **No data collection**
 - This server only talks to Apertis API

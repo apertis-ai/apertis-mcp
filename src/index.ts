@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { McpServer, StdioServerTransport } from "@modelcontextprotocol/server";
+import { McpServer } from "@modelcontextprotocol/server";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { getConfig } from "./config.js";
 import { ApertisClient } from "./client.js";
 import { registerModelTools } from "./tools/models.js";
@@ -20,7 +21,7 @@ async function main() {
 
     // Create MCP server
     const server = new McpServer(
-      { name: "apertis", version: "0.4.0" },
+      { name: "apertis", version: "0.4.2" },
       {
         instructions:
           "Apertis MCP Server for managing your AI API Gateway. Use check_quota before suggesting model switches. All tools are available for querying models, account info, usage stats, and API keys.",

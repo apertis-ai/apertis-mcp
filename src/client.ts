@@ -17,14 +17,24 @@ export interface Model {
   features?: string[];
 }
 
-export interface User {
-  id: number;
-  email?: string;
+/** GET /v1/token/info `data`. Optional keys are absent when not applicable. */
+export interface TokenInfo {
+  id?: number;
   name?: string;
-  balance?: number;
-  subscription_plan?: string;
-  subscription_status?: string;
-  subscription_expiry?: string;
+  status?: string;
+  created_at?: number | string;
+  last_used_at?: number | string;
+  expired_at?: number | string;
+  unlimited_quota?: boolean;
+  remain_quota_usd?: number;
+  used_quota_usd?: number;
+  monthly_limit_usd?: number;
+  monthly_used_usd?: number;
+  subscription?: {
+    plan?: string;
+    status?: string;
+    expiry?: number | string;
+  };
 }
 
 export type RecommendTask =
@@ -52,31 +62,27 @@ export interface Recommendation {
   alternatives: RecommendAlternative[];
 }
 
+/** One entry of GET /v1/token/keys `data` (key is masked by the gateway). */
 export interface Token {
-  id: string;
-  name: string;
+  id?: number;
+  name?: string;
   key?: string;
-  remaining_quota?: number;
-  total_quota?: number;
-  created_at?: string;
   status?: string;
-  last_used?: string;
+  created_at?: number | string;
+  last_used_at?: number | string;
+  unlimited_quota?: boolean;
+  remain_quota_usd?: number;
+  used_quota_usd?: number;
 }
 
+/** GET /v1/token/usage `data`: all-time totals for the calling key. */
 export interface UsageStat {
-  period: string;
+  token_name?: string;
+  total_quota_usd?: number;
   total_tokens?: number;
-  total_cost?: number;
-  models?: Array<{
-    model: string;
-    tokens: number;
-    cost: number;
-  }>;
-  daily_breakdown?: Array<{
-    date: string;
-    tokens: number;
-    cost: number;
-  }>;
+  total_requests?: number;
+  remain_quota_usd?: number;
+  used_quota_usd?: number;
 }
 
 // Raw response from /api/v2/models
@@ -98,8 +104,11 @@ interface ApiModelEntry {
 
 interface ApiModelsResponse {
   models: ApiModelEntry[];
-  pagination: { total: number };
+  pagination?: { total?: number; has_more?: boolean };
 }
+
+export const MODELS_PAGE_SIZE = 100;
+export const MODELS_MAX_PAGES = 50;
 
 export class ApertisClient {
   private apiKey: string;
@@ -149,20 +158,32 @@ export class ApertisClient {
 
     this.modelsFetching = (async () => {
       try {
-        // Use /api/v2/models which has pricing, context_length, provider
-        const response = await this.request(
-          "/api/v2/models?page=1&page_size=500",
-        );
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch models: ${response.status} ${response.statusText}`,
+        // /api/v2/models is paginated (limit is clamped to 100): walk it
+        // with offset until the gateway reports has_more: false.
+        const entries: ApiModelEntry[] = [];
+        let offset = 0;
+        for (let page = 0; ; page++) {
+          if (page >= MODELS_MAX_PAGES) {
+            throw new Error(
+              `Model catalog exceeded the ${MODELS_MAX_PAGES}-page cap (${MODELS_PAGE_SIZE} models per page); stopping`,
+            );
+          }
+          const response = await this.request(
+            `/api/v2/models?limit=${MODELS_PAGE_SIZE}&offset=${offset}`,
           );
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch models: ${response.status} ${response.statusText}`,
+            );
+          }
+          const body = (await response.json()) as {
+            data?: ApiModelsResponse;
+          } & Partial<ApiModelsResponse>;
+          const pageData = body.data ?? body;
+          entries.push(...(pageData.models || []));
+          if (pageData.pagination?.has_more !== true) break;
+          offset += MODELS_PAGE_SIZE;
         }
-
-        const body = (await response.json()) as {
-          data?: ApiModelsResponse;
-        } & ApiModelsResponse;
-        const entries = body.data?.models || body.models || [];
 
         const models: Model[] = entries
           .filter((e) => e.is_enabled && !e.is_deprecated)
@@ -203,61 +224,33 @@ export class ApertisClient {
     throw new Error(`Model '${modelId}' not found`);
   }
 
-  async getUserSelf(): Promise<User> {
-    // Uses /v1/token/info — works with API key auth (no JWT needed)
-    const response = await this.request("/v1/token/info");
+  private async getData<T>(endpoint: string, what: string): Promise<T> {
+    const response = await this.request(endpoint);
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch token info: ${response.status} ${response.statusText}`,
+        `Failed to fetch ${what}: ${response.status} ${response.statusText}`,
       );
     }
-
-    const body = (await response.json()) as {
-      success: boolean;
-      data: Record<string, unknown>;
-    };
-    const d = body.data || body;
-    const owner = d.owner as Record<string, string> | undefined;
-    const sub = d.subscription as Record<string, unknown> | undefined;
-
-    return {
-      id: d.id as number,
-      email: owner?.email,
-      name: owner?.username || (d.name as string),
-      balance: d.remain_quota_usd as number | undefined,
-      subscription_plan: sub?.plan as string | undefined,
-      subscription_status: sub?.status as string | undefined,
-      subscription_expiry: sub?.expiry as string | undefined,
-    };
+    const body = (await response.json()) as { data?: T } & Record<
+      string,
+      unknown
+    >;
+    return (body.data ?? body) as T;
   }
 
-  async getUsageStats(
-    period: "today" | "week" | "month" = "today",
-  ): Promise<UsageStat> {
-    const response = await this.request(
-      `/v1/token/usage?period=${encodeURIComponent(period)}`,
-    );
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch usage stats: ${response.status} ${response.statusText}`,
-      );
-    }
+  async getTokenInfo(): Promise<TokenInfo> {
+    // Works with API key auth (no JWT needed)
+    return this.getData<TokenInfo>("/v1/token/info", "token info");
+  }
 
-    const data = (await response.json()) as UsageStat;
-    return data;
+  async getUsageStats(): Promise<UsageStat> {
+    // The gateway accepts no query parameters: totals are all-time for this key.
+    return this.getData<UsageStat>("/v1/token/usage", "usage stats");
   }
 
   async getTokens(): Promise<Token[]> {
-    const response = await this.request("/v1/token/keys");
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch tokens: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const body = (await response.json()) as unknown;
-    const result = body as { success: boolean; data: Token[] };
-    return result.data || (Array.isArray(body) ? (body as Token[]) : []);
+    const data = await this.getData<Token[]>("/v1/token/keys", "tokens");
+    return Array.isArray(data) ? data : [];
   }
 
   async getRecommendation(
@@ -273,23 +266,6 @@ export class ApertisClient {
       );
     }
     return (await response.json()) as Recommendation;
-  }
-
-  async createToken(name: string, quota?: number): Promise<Token> {
-    const payload = { name, ...(quota && { quota }) };
-    const response = await this.request("/v1/token/keys", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to create token: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const body = (await response.json()) as { success: boolean; data: Token };
-    return body.data || (body as unknown as Token);
   }
 
   async chatCompletion(

@@ -1,6 +1,6 @@
 {
   "name": "@apertis/mcp-server",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "MCP server for the Apertis AI API Gateway — models, keys, usage, quota, and the delegate coworker tool",
   "type": "module",
   "repository": {
@@ -23,11 +23,12 @@
     "dev": "tsx src/index.ts",
     "pretest": "tsc",
     "test": "node --import tsx --test test/*.test.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
-    "@modelcontextprotocol/server": "^2.0.0-alpha.2",
+    "@modelcontextprotocol/server": "2.4.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -36,7 +37,7 @@
     "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "license": "MIT"
 }
