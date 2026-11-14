@@ -23,10 +23,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   `last_used_at`, ...) and omit any field the gateway does not send. The
   gateway returns no email, and usage totals are all-time for the key, so the
   `period` argument of `get_usage_stats` no longer filters anything.
+- **`list_api_keys` said it lists all keys.** The gateway reports only the
+  key the server is using, and the tool and the docs now say so.
 
 ### Removed
 
 - The `create_api_key` tool. Create API keys in the Apertis dashboard.
+- The `@cfworker/json-schema` dependency, which the pinned SDK no longer
+  needs.
 
 ### Added
 

@@ -104,7 +104,12 @@ interface ApiModelEntry {
 
 interface ApiModelsResponse {
   models: ApiModelEntry[];
-  pagination?: { total?: number; has_more?: boolean };
+  pagination?: {
+    total?: number;
+    limit?: number;
+    offset?: number;
+    has_more?: boolean;
+  };
 }
 
 export const MODELS_PAGE_SIZE = 100;
@@ -161,6 +166,7 @@ export class ApertisClient {
         // /api/v2/models is paginated (limit is clamped to 100): walk it
         // with offset until the gateway reports has_more: false.
         const entries: ApiModelEntry[] = [];
+        const seenIds = new Set<string>();
         let offset = 0;
         for (let page = 0; ; page++) {
           if (page >= MODELS_MAX_PAGES) {
@@ -168,8 +174,9 @@ export class ApertisClient {
               `Model catalog exceeded the ${MODELS_MAX_PAGES}-page cap (${MODELS_PAGE_SIZE} models per page); stopping`,
             );
           }
+          // Trailing slash: the gateway answers the bare path with a redirect.
           const response = await this.request(
-            `/api/v2/models?limit=${MODELS_PAGE_SIZE}&offset=${offset}`,
+            `/api/v2/models/?limit=${MODELS_PAGE_SIZE}&offset=${offset}`,
           );
           if (!response.ok) {
             throw new Error(
@@ -180,9 +187,19 @@ export class ApertisClient {
             data?: ApiModelsResponse;
           } & Partial<ApiModelsResponse>;
           const pageData = body.data ?? body;
-          entries.push(...(pageData.models || []));
+          const pageEntries = pageData.models || [];
+          // A catalog refresh between pages can repeat a model: keep the first.
+          for (const e of pageEntries) {
+            if (seenIds.has(e.model_id)) continue;
+            seenIds.add(e.model_id);
+            entries.push(e);
+          }
           if (pageData.pagination?.has_more !== true) break;
-          offset += MODELS_PAGE_SIZE;
+          // Advance by the page size the gateway actually served, which can
+          // be smaller than the one requested.
+          const step = pageData.pagination?.limit || pageEntries.length;
+          if (step <= 0) break;
+          offset += step;
         }
 
         const models: Model[] = entries

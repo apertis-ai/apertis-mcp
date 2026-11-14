@@ -2,7 +2,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { ApertisClient, MODELS_MAX_PAGES } from "../src/client.ts";
 import { registerAccountTools } from "../src/tools/account.ts";
-import { registerKeyTools } from "../src/tools/keys.ts";
+import { maskKey, registerKeyTools } from "../src/tools/keys.ts";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -58,19 +58,22 @@ async function tools(register: typeof registerAccountTools, client: ApertisClien
 }
 
 test("getModels walks pages by offset until has_more is false", async () => {
-  const pages = [
-    { models: [entry("a"), entry("b")], has_more: true },
-    { models: [entry("c")], has_more: true },
-    { models: [entry("d")], has_more: false },
-  ];
+  // The fake gateway serves 2 models per page whatever limit is asked for,
+  // as the real one does when it clamps, and repeats one model across pages.
+  const catalog = ["a", "b", "c", "c", "d"].map(entry);
+  const served = 2;
   const seen = fakeFetch((url) => {
     const offset = Number(url.searchParams.get("offset"));
-    const p = pages[offset / 100];
     return json({
       success: true,
       data: {
-        models: p.models,
-        pagination: { total: 4, has_more: p.has_more },
+        models: catalog.slice(offset, offset + served),
+        pagination: {
+          total: catalog.length,
+          limit: served,
+          offset,
+          has_more: offset + served < catalog.length,
+        },
       },
     });
   });
@@ -78,12 +81,32 @@ test("getModels walks pages by offset until has_more is false", async () => {
   const models = await client.getModels();
   assert.deepEqual(models.map((m) => m.id), ["a", "b", "c", "d"]);
   assert.deepEqual(seen, [
-    "/api/v2/models?limit=100&offset=0",
-    "/api/v2/models?limit=100&offset=100",
-    "/api/v2/models?limit=100&offset=200",
+    "/api/v2/models/?limit=100&offset=0",
+    "/api/v2/models/?limit=100&offset=2",
+    "/api/v2/models/?limit=100&offset=4",
   ]);
   await client.getModels(); // cached: no further requests
   assert.equal(seen.length, 3);
+});
+
+test("getModels does not cache a walk that failed part way", async () => {
+  let failSecond = true;
+  const seen = fakeFetch((url) => {
+    const offset = Number(url.searchParams.get("offset"));
+    if (offset === 1 && failSecond) return new Response("no", { status: 502 });
+    return json({
+      data: {
+        models: [entry(offset === 0 ? "a" : "b")],
+        pagination: { limit: 1, has_more: offset === 0 },
+      },
+    });
+  });
+  const client = new ApertisClient("k", "http://gw.test");
+  await assert.rejects(() => client.getModels(), /502/);
+  failSecond = false;
+  const models = await client.getModels();
+  assert.deepEqual(models.map((m) => m.id), ["a", "b"]);
+  assert.equal(seen.length, 4);
 });
 
 test("getModels raises a tool error naming the page cap", async () => {
@@ -198,4 +221,11 @@ test("list_api_keys prints gateway fields and never undefined", async () => {
   assert.match(out, /Unlimited/);
   assert.doesNotMatch(out, /undefined|NaN|Invalid/);
   assert.deepEqual([...h.keys()], ["list_api_keys"]);
+});
+
+test("maskKey never passes a full key through", () => {
+  assert.equal(maskKey("sk-abcde..."), "sk-abcde...");
+  assert.equal(maskKey("sk-0123456789abcdef0123456789abcdef"), "sk-01234...");
+  assert.equal(maskKey("sk-0123456789abcdef0123456789abc..."), "sk-01234...");
+  assert.equal(maskKey(undefined), "****");
 });

@@ -76,7 +76,7 @@ Add this to your `openclaw.json`:
 | `compare_models` | Side-by-side comparison of 2-5 models |
 | `check_quota` | Check this key's remaining quota, usage, status, and subscription |
 | `get_usage_stats` | Get all-time usage totals (tokens, requests, spend) for this key |
-| `list_api_keys` | List all your API keys with status and quota (keys are masked) |
+| `list_api_keys` | Show the API key this server is using: status and quota (the key is masked) |
 | `suggest_model` | Freeform keyword-based model search over the full catalog |
 | `recommend_model` | Get the curated Apertis pick for a task type (`coding`, `long-context`, `fast-chat`, `reasoning`, `vision`) with live pricing |
 | `delegate` | Delegate bulk grunt work (bulk file reads, boilerplate, summarization) to a cheap intern model. Files are read by the coworker, so their content never enters your context — keeps your Claude usage limit intact |
@@ -130,7 +130,7 @@ MCP: Use get_usage_stats
 ```
 Claude: list my API keys
 MCP: Use list_api_keys
-→ Shows all keys with status and quota (masked for security)
+→ Shows this API key with its status and quota (masked for security)
 
 New keys are created in the Apertis dashboard, not through this server.
 ```
@@ -165,7 +165,7 @@ To make Claude delegate automatically, paste the routing rules from
 
 ## Security Notes
 
-- All API keys in tool output are masked (first 4 + last 4 characters)
+- An API key in tool output is always masked (a short prefix followed by `...`)
 - When creating a new key, the full key is shown only once — save it immediately
 - The MCP server requires your API key in the environment — keep it secure
 - Use Claude Code environment variable expansion for credentials

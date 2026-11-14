@@ -74,7 +74,7 @@ npm run dev
 ### API Key Management
 ```
 "list my API keys"
-"show me all my keys"
+"show me the key I am using"
 ```
 
 ### Smart Recommendations

@@ -38,6 +38,10 @@ function run(cmd, args, cwd) {
   return r.stdout;
 }
 
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => fail(`interrupted by ${sig}`));
+}
+
 try {
   if (!process.env.SMOKE_SKIP_BUILD) run("npm", ["run", "build"], root);
   spawnSync("mkdir", ["-p", packDir, installDir]);
@@ -53,6 +57,7 @@ try {
     env: { ...process.env, APERTIS_API_KEY: "sk-smoke-dummy", npm_config_cache: cache },
     stdio: ["pipe", "pipe", "pipe"],
   });
+  child.on("error", (e) => fail(`could not start ${bin}: ${e.message}`));
   let out = "";
   let err = "";
   child.stdout.on("data", (d) => (out += d));

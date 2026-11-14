@@ -7,6 +7,16 @@ import { toolError } from "../utils/error.js";
 
 const ListApiKeysInput = z.object({});
 
+/**
+ * The gateway already masks the key (a short prefix plus "..."). If it ever
+ * returns anything longer, cut it here so a full key is never printed.
+ */
+export function maskKey(key: string | undefined): string {
+  if (!key) return "****";
+  if (key.length <= 12 && key.endsWith("...")) return key;
+  return `${key.slice(0, 8)}...`;
+}
+
 export async function registerKeyTools(
   client: ApertisClient,
   server: McpServer,
@@ -15,7 +25,7 @@ export async function registerKeyTools(
     "list_api_keys",
     {
       description:
-        "List all your API keys with status and quota information (keys are masked for security)",
+        "Show the API key this server is using: name, masked key, status and quota. The gateway reports only the calling key, never the account's other keys",
       inputSchema: ListApiKeysInput,
     },
     async () => {
@@ -27,7 +37,7 @@ export async function registerKeyTools(
             content: [
               {
                 type: "text",
-                text: "No API keys found. Create one in the Apertis dashboard.",
+                text: "The gateway returned no key details. API keys are created and listed in the Apertis dashboard.",
               },
             ],
           };
@@ -44,7 +54,7 @@ export async function registerKeyTools(
         ];
         const rows = tokens.map((t) => [
           t.name || "(unnamed)",
-          t.key || "****",
+          maskKey(t.key),
           t.status || "unknown",
           t.unlimited_quota ? "Unlimited" : usd(t.remain_quota_usd) || "-",
           usd(t.used_quota_usd) || "-",
@@ -56,7 +66,7 @@ export async function registerKeyTools(
           content: [
             {
               type: "text",
-              text: `Found ${tokens.length} API key(s):\n\n${table}`,
+              text: `This API key:\n\n${table}`,
             },
           ],
         };
