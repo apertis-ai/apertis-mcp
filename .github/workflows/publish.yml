@@ -1,25 +1,46 @@
 name: Publish to npm
 
-# Publishes @apertis/mcp-server when a GitHub Release is published.
-# Requires a repo secret NPM_TOKEN (npm automation token with publish rights).
+# Publishes @apertis/mcp-server when a GitHub Release is published, or when
+# dispatched by hand for a tag whose publish did not complete.
+#
+# Authentication is npm trusted publishing (OIDC): the package's settings on
+# npmjs.com name this repository and this workflow file, so no long-lived token
+# is stored. If no trusted publisher is configured, npm falls back to the
+# NPM_TOKEN secret, which expires and must then be replaced.
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish, e.g. v0.4.2'
+        required: true
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
-      id-token: write   # enables npm provenance attestation
+      id-token: write   # OIDC: trusted publishing and the provenance attestation
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.event.release.tag_name }}   # a tag only, never a branch
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - run: npm install -g npm@11
+
+      - name: The tag is the version in package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
 
       - run: npm ci
 
