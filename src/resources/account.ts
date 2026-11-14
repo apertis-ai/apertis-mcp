@@ -11,18 +11,10 @@ export async function registerAccountResource(
     {},
     async (uri: URL) => {
       try {
-        const user = await client.getUserSelf();
+        const t = await client.getTokenInfo();
 
         const data = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          balance: user.balance,
-          subscription: {
-            plan: user.subscription_plan,
-            status: user.subscription_status,
-            expiry: user.subscription_expiry,
-          },
+          ...t,
           retrieved_at: new Date().toISOString(),
         };
 
