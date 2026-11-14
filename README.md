@@ -166,7 +166,7 @@ To make Claude delegate automatically, paste the routing rules from
 ## Security Notes
 
 - An API key in tool output is always masked (a short prefix followed by `...`)
-- When creating a new key, the full key is shown only once — save it immediately
+- This server creates no keys; create API keys in the Apertis dashboard
 - The MCP server requires your API key in the environment — keep it secure
 - Use Claude Code environment variable expansion for credentials
 

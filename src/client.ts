@@ -163,15 +163,15 @@ export class ApertisClient {
 
     this.modelsFetching = (async () => {
       try {
-        // /api/v2/models is paginated (limit is clamped to 100): walk it
-        // with offset until the gateway reports has_more: false.
+        // /api/v2/models is paginated and the gateway decides the page size:
+        // walk it by offset until it reports has_more: false.
         const entries: ApiModelEntry[] = [];
         const seenIds = new Set<string>();
         let offset = 0;
         for (let page = 0; ; page++) {
           if (page >= MODELS_MAX_PAGES) {
             throw new Error(
-              `Model catalog exceeded the ${MODELS_MAX_PAGES}-page cap (${MODELS_PAGE_SIZE} models per page); stopping`,
+              `Model catalog exceeded the ${MODELS_MAX_PAGES}-page cap; stopping`,
             );
           }
           // Trailing slash: the gateway answers the bare path with a redirect.
@@ -198,7 +198,11 @@ export class ApertisClient {
           // Advance by the page size the gateway actually served, which can
           // be smaller than the one requested.
           const step = pageData.pagination?.limit || pageEntries.length;
-          if (step <= 0) break;
+          if (step <= 0) {
+            throw new Error(
+              "Model catalog reported more pages but returned an empty page; stopping",
+            );
+          }
           offset += step;
         }
 

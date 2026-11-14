@@ -109,6 +109,12 @@ test("getModels does not cache a walk that failed part way", async () => {
   assert.equal(seen.length, 4);
 });
 
+test("getModels raises when more pages are promised but a page is empty", async () => {
+  fakeFetch(() => json({ data: { models: [], pagination: { has_more: true } } }));
+  const client = new ApertisClient("k", "http://gw.test");
+  await assert.rejects(() => client.getModels(), /empty page/);
+});
+
 test("getModels raises a tool error naming the page cap", async () => {
   const seen = fakeFetch(() =>
     json({
