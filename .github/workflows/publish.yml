@@ -1,7 +1,12 @@
 name: Publish to npm
 
-# Publishes @apertis/mcp-server when a GitHub Release is published, or when
-# dispatched by hand for a tag whose publish did not complete.
+# Publishes @apertis/mcp-server when a GitHub Release is published.
+#
+# Two jobs, so that nothing which runs dependency code can publish:
+#   build    installs, tests, runs the clean-install smoke test and packs the
+#            tarball. It has no id-token permission and no npm credential.
+#   publish  receives only the tarball and publishes it without running any
+#            package script.
 #
 # Authentication is npm trusted publishing (OIDC): the package's settings on
 # npmjs.com name this repository and this workflow file, so no long-lived token
@@ -11,36 +16,27 @@ name: Publish to npm
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing release tag to publish, e.g. v0.4.2'
-        required: true
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write   # OIDC: trusted publishing and the provenance attestation
-    env:
-      TAG: ${{ inputs.tag || github.event.release.tag_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: refs/tags/${{ inputs.tag || github.event.release.tag_name }}   # a tag only, never a branch
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-
-      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
-      - run: npm install -g npm@11
+          persist-credentials: false
 
       - name: The tag is the version in package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
         run: test "v$(node -p "require('./package.json').version")" = "$TAG"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
 
       - run: npm ci
 
@@ -50,7 +46,35 @@ jobs:
       - name: Clean-install smoke test
         run: npm run smoke
 
+      - name: Pack
+        run: npm run build && npm pack
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package
+          path: apertis-mcp-server-*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write   # OIDC: trusted publishing and the provenance attestation
+    steps:
+      # Node 24 ships npm 11.19, and trusted publishing needs npm 11.5.1 or later.
+      # Nothing is installed in this job.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package
+
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish ./apertis-mcp-server-*.tgz --provenance --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
