@@ -10,7 +10,11 @@ name: Publish to npm
 #
 # Authentication is npm trusted publishing (OIDC): the package's settings on
 # npmjs.com name this repository and this workflow file, so no long-lived token
-# is stored. No token is passed and no .npmrc is written, so npm can only
+# is stored. The job stages the version (`npm stage publish`, which every trusted
+# publisher may run); it becomes installable only after a maintainer approves it
+# with 2FA in the package's Staged Packages tab on npmjs.com. A direct
+# `npm publish` was refused with E403 "OIDC permission denied for this action",
+# because trusted publishers created after 2026-09-03 are stage-only by default. No token is passed and no .npmrc is written, so npm can only
 # authenticate through OIDC (a stale token in .npmrc took precedence, #8452).
 
 on:
@@ -80,4 +84,4 @@ jobs:
         run: |
           tarball="apertis-mcp-server-${TAG#v}.tgz"
           test "$(ls -A)" = "$tarball"
-          npm publish "./$tarball" --provenance --access public --ignore-scripts
+          npm stage publish "./$tarball" --provenance --access public --ignore-scripts
